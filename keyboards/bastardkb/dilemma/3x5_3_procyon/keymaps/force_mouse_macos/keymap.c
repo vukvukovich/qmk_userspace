@@ -170,3 +170,25 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 
 // clang-format on
 #endif // ENCODER_MAP_ENABLE
+
+extern bool force_digitizer_send_mouse_reports;
+
+bool process_detected_host_os_kb(os_variant_t detected_os) {
+    if (!process_detected_host_os_user(detected_os)) {
+        return false;
+    }
+    switch (detected_os) {
+        case OS_MACOS:
+        case OS_IOS:
+            // Force mouse mode
+            force_digitizer_send_mouse_reports = true;
+            break;
+        case OS_WINDOWS:
+        case OS_LINUX:
+        case OS_UNSURE:
+            // Rely on autodetection of mouse mode
+            break;
+    }
+    return true;
+}
+

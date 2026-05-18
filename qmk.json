@@ -17,8 +17,10 @@
         ["georgen/peacock/v1_01", "stylus"],
         ["bastardkb/dilemma/3x5_3_procyon", "vendor"],
         ["bastardkb/dilemma/3x5_3_procyon", "force_mouse"],
+        ["bastardkb/dilemma/3x5_3_procyon", "force_mouse_macos"],
         ["bastardkb/dilemma/4x6_4_procyon", "vendor"],
         ["bastardkb/dilemma/4x6_4_procyon", "force_mouse"],
+        ["bastardkb/dilemma/4x6_4_procyon", "force_mouse_macos"],
         ["handwired/onekey/rp2040", "digitizer"]
     ]
 }

@@ -122,6 +122,9 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
     [LAYER_POINTER]    = {ENCODER_CCW_CW(RM_HUED, RM_HUEU), ENCODER_CCW_CW(RM_SATD, RM_SATU)},
 };
 
+// clang-format on
+#endif // ENCODER_MAP_ENABLE
+
 extern bool force_digitizer_send_mouse_reports;
 
 bool process_detected_host_os_kb(os_variant_t detected_os) {
@@ -140,6 +143,3 @@ bool process_detected_host_os_kb(os_variant_t detected_os) {
     }
     return true;
 }
-
-// clang-format on
-#endif // ENCODER_MAP_ENABLE
