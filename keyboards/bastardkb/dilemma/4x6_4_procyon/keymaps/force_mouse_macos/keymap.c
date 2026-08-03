@@ -127,6 +127,44 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 
 extern bool force_digitizer_send_mouse_reports;
 
+#ifdef CONSOLE_ENABLE
+#    include "print.h"
+#endif
+
+// Live 1-euro filter tuning (digitizer_mouse_fallback.c). TEMPORARY:
+// F13-F17 are intercepted as tuning knobs and never reach the host, so
+// they can be placed by NAME in usevia.app - remove once values are baked.
+//   F13 mincutoff down | F14 mincutoff up   (rest-jitter knob)
+//   F15 beta down      | F16 beta up        (fast-swipe-lag knob)
+//   F17 print current values to the QMK console
+//   F18 toggle the rest clamp on/off (live A/B of rest behavior)
+// Values reset to the config.h boot values on power cycle - once a feel
+// is found, read them off the console and bake them into config.h.
+extern float one_euro_mincutoff;
+extern float one_euro_beta;
+extern bool  one_euro_rest_clamp;
+
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    if (!record->event.pressed) return true;
+    switch (keycode) {
+        case KC_F13: one_euro_mincutoff *= 0.7f; break;
+        case KC_F14: one_euro_mincutoff *= 1.43f; break;
+        case KC_F15: one_euro_beta *= 0.7f; break;
+        case KC_F16: one_euro_beta *= 1.43f; break;
+        case KC_F17: break; /* print only */
+        case KC_F18: one_euro_rest_clamp = !one_euro_rest_clamp; break;
+        default: return true;
+    }
+    if (one_euro_mincutoff < 0.05f) one_euro_mincutoff = 0.05f;
+    if (one_euro_mincutoff > 10.0f) one_euro_mincutoff = 10.0f;
+    if (one_euro_beta < 0.00005f) one_euro_beta = 0.00005f;
+    if (one_euro_beta > 1.0f) one_euro_beta = 1.0f;
+#ifdef CONSOLE_ENABLE
+    uprintf("1EU mincutoff=%lu milliHz beta=%lu /100000 clamp=%u\n", (uint32_t)(one_euro_mincutoff * 1000.0f + 0.5f), (uint32_t)(one_euro_beta * 100000.0f + 0.5f), (unsigned)one_euro_rest_clamp);
+#endif
+    return false;
+}
+
 bool process_detected_host_os_kb(os_variant_t detected_os) {
     if (!process_detected_host_os_user(detected_os)) {
         return false;
