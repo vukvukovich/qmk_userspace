@@ -150,6 +150,15 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+// This keymap exists for macOS, which cannot consume digitizer reports:
+// mouse mode is forced unconditionally at boot. Without this, mouse mode
+// hangs on two fragile things - OS detection succeeding, and no host ever
+// sending the PTP input-mode feature request (which silently switches the
+// firmware to digitizer reporting).
+void keyboard_post_init_user(void) {
+    force_digitizer_send_mouse_reports = true;
+}
+
 // NAT_TOG (keyboard keycode) toggles scroll direction; natural is also
 // the compile-time boot default (DIGITIZER_NATURAL_SCROLL).
 bool process_detected_host_os_kb(os_variant_t detected_os) {
