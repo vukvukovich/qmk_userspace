@@ -36,7 +36,7 @@
 #define MXT_MOVE_SMOOTHING 255
 
 /* Raw sensor event trace over QMK console - re-enable for debugging */
-// #define MAXTOUCH_EVENT_TRACE
+#define MAXTOUCH_EVENT_TRACE
 
 /* Edge-cell inclusion tuning: lower internal threshold so cells at the
  * finger's leading/trailing edge join the centroid gradually while
@@ -57,22 +57,14 @@
 #define ONE_EURO_MINCUTOFF 1.0f
 #define ONE_EURO_BETA 0.01f
 
-/* Hi-res wheel experiment failed on macOS (2026-08-04): QMK scales
- * wheel units unconditionally but macOS never activates the HID
- * resolution multiplier, so everything arrived 120x too fast. The fix
- * that worked instead: wheel events throttled to physical-wheel
- * cadence (DIGITIZER_SCROLL_INTERVAL_MS in the fallback), which took
- * macOS out of its saturated-acceleration regime and made both the
- * divisor and the system slider effective again. */
-/* With the host-side pixel conversion (LineScroll.spoon) the pipeline
- * is linear: divisor = finger travel per line, the single source of
- * truth for scroll speed. 112 = calibrated match to an Apple trackpad
- * with the macOS Mouse scrolling slider at its middle default.
- * Interval is just the emission tick - smooth, not a knob. */
+/* Scroll: travel/divisor wheel clicks per 16ms tick, magnitude intact.
+ * Intended for a host-side event tap that renders each click as a
+ * fixed pixel amount (macOS inflates raw wheel clicks to multiple
+ * lines and accelerates by rate; neither is disableable per device).
+ * The divisor is then the single source of truth for scroll speed:
+ * 112 matches an Apple trackpad with the macOS Mouse scrolling
+ * slider at its middle default. */
 #define DIGITIZER_SCROLL_DIVISOR 112
-/* 16ms: with the host-side pixel conversion there is no acceleration
- * to saturate, so the old wheel-plausibility cap is obsolete - the
- * divisor alone rules the speed. */
 #define DIGITIZER_SCROLL_INTERVAL_MS 16
 
 /* Natural scroll as the BOOT default - not dependent on OS detection
