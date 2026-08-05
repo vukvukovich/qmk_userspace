@@ -126,7 +126,32 @@ const uint16_t PROGMEM encoder_map[][NUM_ENCODERS][NUM_DIRECTIONS] = {
 #endif // ENCODER_MAP_ENABLE
 
 extern bool force_digitizer_send_mouse_reports;
+extern bool digitizer_natural_scroll;
 
+// macOS "natural scrolling" inverts wheel events system-wide, which
+// would make a key labeled wheel-down scroll up. While natural scroll
+// is active, swap the wheel keycodes (keys and encoder alike) so they
+// keep their labeled meaning.
+bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    uint16_t swapped;
+    switch (keycode) {
+        case MS_WHLU: swapped = MS_WHLD; break;
+        case MS_WHLD: swapped = MS_WHLU; break;
+        case MS_WHLL: swapped = MS_WHLR; break;
+        case MS_WHLR: swapped = MS_WHLL; break;
+        default: return true;
+    }
+    if (!digitizer_natural_scroll) return true;
+    if (record->event.pressed) {
+        register_code16(swapped);
+    } else {
+        unregister_code16(swapped);
+    }
+    return false;
+}
+
+// NAT_TOG (keyboard keycode) toggles scroll direction; natural is also
+// the compile-time boot default (DIGITIZER_NATURAL_SCROLL).
 bool process_detected_host_os_kb(os_variant_t detected_os) {
     if (!process_detected_host_os_user(detected_os)) {
         return false;
@@ -136,6 +161,7 @@ bool process_detected_host_os_kb(os_variant_t detected_os) {
         case OS_IOS:
             // Force mouse mode
             force_digitizer_send_mouse_reports = true;
+            digitizer_natural_scroll           = true;
             break;
         case OS_WINDOWS:
         case OS_LINUX:
