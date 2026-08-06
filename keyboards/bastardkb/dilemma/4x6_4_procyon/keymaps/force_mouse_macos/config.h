@@ -38,6 +38,23 @@
 /* Raw sensor event trace over QMK console - re-enable for debugging */
 #define MAXTOUCH_EVENT_TRACE
 
+/* Analog gain: stock Procyon 10. The measured contact amplitudes
+ * (18-40 vs threshold 20) are razor-thin for weakly-coupled or dry
+ * fingers - the user's palm-grounding trick proved failures scale
+ * with signal strength. Raising gain widens every margin. */
+#define MXT_GAIN 12
+
+/* Contact geometry instrumentation for merged-finger detection: enables
+ * ONLY the sensor's width/height aux bytes and their trace print - NOT
+ * DIGITIZER_REPORT_FINGER_SIZE, whose liftoff-buffer path causes
+ * at-rest jitter. */
+#define MXT_REPORT_CONTACT_SIZE
+
+/* Merge threshold experiment: stock 5 merges close fingers into one
+ * contact (measured: only 25-47% two-contact frames with close
+ * fingers). Raised to keep them separate; watch for phantom splits. */
+#define MXT_MERGE_THRESHOLD 25
+
 /* Edge-cell inclusion tuning: lower internal threshold so cells at the
  * finger's leading/trailing edge join the centroid gradually while
  * ramping, instead of popping in at full weight (the measured ~1-row
