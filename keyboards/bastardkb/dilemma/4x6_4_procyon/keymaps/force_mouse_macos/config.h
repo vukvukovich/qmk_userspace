@@ -50,10 +50,12 @@
  * at-rest jitter. */
 #define MXT_REPORT_CONTACT_SIZE
 
-/* Merge threshold experiment: stock 5 merges close fingers into one
- * contact (measured: only 25-47% two-contact frames with close
- * fingers). Raised to keep them separate; watch for phantom splits. */
-#define MXT_MERGE_THRESHOLD 25
+/* Merge threshold: measured DIRECTION IS INVERTED vs intuition -
+ * HIGHER value = MORE merge-eager. Close-finger two-contact share:
+ * 25-47% at 5+gain10, 73.6% at 25+gain12, 16.3% at 40+gain12 (fingers
+ * had to be spread wide to scroll at all). Back to stock 5; gain 12
+ * appears to be the real de-merge lever. */
+#define MXT_MERGE_THRESHOLD 5
 
 /* Edge-cell inclusion tuning: lower internal threshold so cells at the
  * finger's leading/trailing edge join the centroid gradually while
