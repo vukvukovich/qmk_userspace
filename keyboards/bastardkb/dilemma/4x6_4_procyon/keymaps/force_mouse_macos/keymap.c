@@ -16,6 +16,8 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include QMK_KEYBOARD_H
+#include "digitizer_mouse_fallback.h"
+#include "dynamic_keymap.h"
 
 enum dilemma_keymap_layers {
     LAYER_BASE = 0,
@@ -126,6 +128,46 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     return false;
 }
 
+// Trackpad swipes are VIA-assignable: the four matrix positions with no
+// physical switch behind them appear in the sideloaded VIA layout as
+// Swipe keys. A swipe injects a key event at its position, so whatever
+// VIA assigned there fires through the normal pipeline (macros, layer
+// keys, custom keycodes included). An unassigned slot falls back to the
+// macOS gesture shortcuts - except on a positively detected non-Apple
+// host, where it stays quiet (Ctrl+arrows is word-jump on Windows).
+// Assign on the base layer.
+static const uint8_t swipe_slot[4][2] = {
+    [DIGITIZER_SWIPE_DIR_LEFT]  = {4, 0},
+    [DIGITIZER_SWIPE_DIR_UP]    = {4, 5},
+    [DIGITIZER_SWIPE_DIR_DOWN]  = {9, 0},
+    [DIGITIZER_SWIPE_DIR_RIGHT] = {9, 5},
+};
+
+void digitizer_swipe_action(digitizer_swipe_dir_t dir) {
+    const uint8_t row = swipe_slot[dir][0];
+    const uint8_t col = swipe_slot[dir][1];
+    if (dynamic_keymap_get_keycode(0, row, col) != KC_NO) {
+        keyevent_t press = MAKE_KEYEVENT(row, col, true);
+        action_exec(press);
+        keyevent_t release = MAKE_KEYEVENT(row, col, false);
+        action_exec(release);
+        return;
+    }
+    switch (detected_host_os()) {
+        case OS_WINDOWS:
+        case OS_LINUX:
+            return;
+        default:
+            break;
+    }
+    switch (dir) {
+        case DIGITIZER_SWIPE_DIR_RIGHT: tap_code16(DIGITIZER_SWIPE_RIGHT_KC); break;
+        case DIGITIZER_SWIPE_DIR_LEFT: tap_code16(DIGITIZER_SWIPE_LEFT_KC); break;
+        case DIGITIZER_SWIPE_DIR_DOWN: tap_code16(DIGITIZER_SWIPE_DOWN_KC); break;
+        case DIGITIZER_SWIPE_DIR_UP: tap_code16(DIGITIZER_SWIPE_UP_KC); break;
+    }
+}
+
 // This keymap exists for macOS, which cannot consume digitizer reports:
 // mouse mode is forced unconditionally at boot. Without this, mouse mode
 // hangs on two fragile things - OS detection succeeding, and no host ever
@@ -150,6 +192,9 @@ bool process_detected_host_os_kb(os_variant_t detected_os) {
             break;
         case OS_WINDOWS:
         case OS_LINUX:
+            // Non-Apple host: standard wheel direction expected
+            digitizer_natural_scroll = false;
+            break;
         case OS_UNSURE:
             // Rely on autodetection of mouse mode
             break;
