@@ -64,7 +64,11 @@
  * 25-47% at 5+gain10, 73.6% at 25+gain12, 16.3% at 40+gain12 (fingers
  * had to be spread wide to scroll at all). Back to stock 5; gain 12
  * appears to be the real de-merge lever. */
-#define MXT_MERGE_THRESHOLD 2 /* experiment: below stock 5 - splits closer fingers; watch for one finger becoming phantom twins */
+#define MXT_MERGE_THRESHOLD 1 /* experiment: minimum practical - maximum finger separation; watch for phantom twins */
+#define MXT_MERGE_HYSTERESIS 5 /* stock 10: lower = a split pair re-fuses less easily (stacked-finger scroll) */
+
+/* Pointer 10% slower per user preference; precision unaffected. */
+#define DIGITIZER_MOUSE_POINTER_SCALE_PCT 70
 
 /* Edge-cell inclusion tuning: lower internal threshold so cells at the
  * finger's leading/trailing edge join the centroid gradually while
