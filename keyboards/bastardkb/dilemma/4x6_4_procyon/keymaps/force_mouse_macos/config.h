@@ -38,6 +38,15 @@
 /* Raw sensor event trace over QMK console - re-enable for debugging */
 #define MAXTOUCH_EVENT_TRACE
 
+/* Charger-noise campaign verdict (measured vs a third-party GaN
+ * charger, the reproducible noise source): chrgtime 1 -> 2 HALVED
+ * phantom contacts, re-registrations and teleports with amplitudes
+ * unchanged - kept. Further raises plateaued; syncsperx averaging
+ * REGRESSED (noise is synchronous with the charger's switching, p5
+ * amp collapsed); T72 blind-enable regressed (register map is NDA).
+ * The residual fix is electrical: grounded charger, ferrites. */
+#define MXT_CHARGE_TIME 2
+
 /* Analog gain: stock Procyon 10. The measured contact amplitudes
  * (18-40 vs threshold 20) are razor-thin for weakly-coupled or dry
  * fingers - the user's palm-grounding trick proved failures scale
@@ -55,7 +64,7 @@
  * 25-47% at 5+gain10, 73.6% at 25+gain12, 16.3% at 40+gain12 (fingers
  * had to be spread wide to scroll at all). Back to stock 5; gain 12
  * appears to be the real de-merge lever. */
-#define MXT_MERGE_THRESHOLD 5
+#define MXT_MERGE_THRESHOLD 2 /* experiment: below stock 5 - splits closer fingers; watch for one finger becoming phantom twins */
 
 /* Edge-cell inclusion tuning: lower internal threshold so cells at the
  * finger's leading/trailing edge join the centroid gradually while
