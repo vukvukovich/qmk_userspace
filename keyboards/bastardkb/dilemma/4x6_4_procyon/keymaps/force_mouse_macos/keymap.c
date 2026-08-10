@@ -18,6 +18,25 @@
 #include QMK_KEYBOARD_H
 #include "digitizer_mouse_fallback.h"
 #include "dynamic_keymap.h"
+#ifdef VIA_ENABLE
+#    include "via.h"
+#endif
+
+/* Hold-to-drag trigger, chosen from a curated dropdown (VIA's keycode
+ * picker can't suggest layer/custom keys - hardcoded app whitelist).
+ * The dropdown stores an INDEX into this table. */
+static const uint16_t tp_drag_key_table[] = {KC_NO, TL_LOWR, TL_UPPR, MO(1), MO(2), MO(3), KC_LSFT, KC_RSFT, KC_LCTL, KC_LALT, KC_LGUI};
+static uint8_t  tp_drag_key_idx  = 0;
+static uint16_t tp_drag_custom   = KC_NO; /* free-entry keycode, used when the dropdown says Custom */
+static uint16_t tp_drag_key      = KC_NO;
+static bool     tp_drag_key_held = false;
+#define TP_DRAG_KEY_TABLE_LEN (sizeof(tp_drag_key_table) / sizeof(tp_drag_key_table[0]))
+#define TP_DRAG_CUSTOM_IDX TP_DRAG_KEY_TABLE_LEN /* dropdown entry after the table = Custom */
+
+static void tp_drag_key_resolve(void) {
+    tp_drag_key      = tp_drag_key_idx == TP_DRAG_CUSTOM_IDX ? tp_drag_custom : tp_drag_key_table[tp_drag_key_idx];
+    tp_drag_key_held = false;
+}
 
 enum dilemma_keymap_layers {
     LAYER_BASE = 0,
@@ -111,12 +130,15 @@ extern bool digitizer_natural_scroll;
 // is active, swap the wheel keycodes (keys and encoder alike) so they
 // keep their labeled meaning.
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
+    /* drag trigger key: observed, never consumed - it keeps its own
+     * function while also arming three-finger select & drag */
+    if (tp_drag_key != KC_NO && keycode == tp_drag_key) {
+        tp_drag_key_held = record->event.pressed;
+    }
     uint16_t swapped;
     switch (keycode) {
         case MS_WHLU: swapped = MS_WHLD; break;
         case MS_WHLD: swapped = MS_WHLU; break;
-        case MS_WHLL: swapped = MS_WHLR; break;
-        case MS_WHLR: swapped = MS_WHLL; break;
         default: return true;
     }
     if (!digitizer_natural_scroll) return true;
@@ -168,6 +190,136 @@ void digitizer_swipe_action(digitizer_swipe_dir_t dir) {
     }
 }
 
+// VIA "Trackpad" settings pane (custom menu channel): per-user,
+// EEPROM-persisted, no code edits. Stored in kb-eeconfig bytes 1-2
+// (byte 0 belongs to the DPI config):
+//   byte 1: bits 0-3 three-finger-drag layer (0 = off)
+//           bit 4 natural-scroll override set, bit 5 its value
+//   byte 2: pointer scale percent (0 = firmware default)
+extern bool    digitizer_three_finger_drag;
+extern uint8_t digitizer_pointer_scale_pct;
+extern bool    digitizer_gesture_trace;
+
+
+
+static void trackpad_settings_apply(void) {
+    const uint32_t ee = eeconfig_read_kb();
+    const uint8_t  b1 = (ee >> 8) & 0xff;
+    const uint8_t  b2 = (ee >> 16) & 0xff;
+#ifdef VIA_ENABLE
+    via_read_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
+    via_read_custom_config(&tp_drag_custom, 1, sizeof(tp_drag_custom));
+    if (tp_drag_key_idx > TP_DRAG_CUSTOM_IDX) tp_drag_key_idx = 0;   /* fresh eeprom */
+    if (tp_drag_custom == 0xffff) tp_drag_custom = KC_NO;
+    tp_drag_key_resolve();
+#endif
+    if (b1 & 0x10) digitizer_natural_scroll = (b1 >> 5) & 1;
+    digitizer_gesture_trace = (b1 >> 6) & 1;
+    if (b2 != 0) digitizer_pointer_scale_pct = b2;
+}
+
+static void trackpad_settings_save(void) {
+    const uint8_t  b1 = 0x10 | (digitizer_natural_scroll ? 0x20 : 0) | (digitizer_gesture_trace ? 0x40 : 0);
+    const uint8_t  b2 = digitizer_pointer_scale_pct;
+    const uint32_t ee = (eeconfig_read_kb() & 0x000000ff) | ((uint32_t)b1 << 8) | ((uint32_t)b2 << 16);
+    eeconfig_update_kb(ee);
+#ifdef VIA_ENABLE
+    via_update_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
+    via_update_custom_config(&tp_drag_custom, 1, sizeof(tp_drag_custom));
+#endif
+}
+
+/* Bindings drive the drag flag only on CHANGES, so the 3FnDrag toggle
+ * key keeps working when no binding is active. */
+void housekeeping_task_user(void) {
+    static bool bound = false;
+    const bool  want  = tp_drag_key_held;
+    if (want != bound) {
+        bound                       = want;
+        digitizer_three_finger_drag = want;
+    }
+}
+
+#ifdef VIA_ENABLE
+enum trackpad_value_id {
+    id_tp_pointer_scale = 2,
+    id_tp_natural_scroll = 3,
+    id_tp_swipe_left = 4,
+    id_tp_swipe_right = 5,
+    id_tp_swipe_up = 6,
+    id_tp_swipe_down = 7,
+    id_tp_drag_key = 9,
+    id_tp_drag_custom = 10,
+    id_tp_trace = 11,
+};
+
+/* The swipe keycode pickers proxy into the spare-matrix slots: same
+ * storage, same persistence, same full-pipeline execution (macros and
+ * layer keys included) as assigning the slot keys directly. */
+static const digitizer_swipe_dir_t swipe_value_dir[4] = {DIGITIZER_SWIPE_DIR_LEFT, DIGITIZER_SWIPE_DIR_RIGHT, DIGITIZER_SWIPE_DIR_UP, DIGITIZER_SWIPE_DIR_DOWN};
+
+void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
+    uint8_t *command_id        = &(data[0]);
+    uint8_t *channel_id        = &(data[1]);
+    uint8_t *value_id_and_data = &(data[2]);
+    if (*channel_id != id_custom_channel) {
+        *command_id = id_unhandled;
+        return;
+    }
+    const uint8_t value_id = value_id_and_data[0];
+    uint8_t      *value    = &value_id_and_data[1];
+    switch (*command_id) {
+        case id_custom_set_value:
+            switch (value_id) {
+                case id_tp_pointer_scale: digitizer_pointer_scale_pct = value[0] ? value[0] : 1; break;
+                case id_tp_natural_scroll: digitizer_natural_scroll = value[0]; break;
+                case id_tp_trace: digitizer_gesture_trace = value[0]; break;
+                case id_tp_drag_key:
+                    tp_drag_key_idx = value[0] <= TP_DRAG_CUSTOM_IDX ? value[0] : 0;
+                    tp_drag_key_resolve();
+                    break;
+                case id_tp_drag_custom:
+                    tp_drag_custom = (value[0] << 8) | value[1];
+                    tp_drag_key_resolve();
+                    break;
+                case id_tp_swipe_left ... id_tp_swipe_down: {
+                    const uint8_t d = swipe_value_dir[value_id - id_tp_swipe_left];
+                    dynamic_keymap_set_keycode(0, swipe_slot[d][0], swipe_slot[d][1], (value[0] << 8) | value[1]);
+                    break;
+                }
+            }
+            break;
+        case id_custom_get_value:
+            switch (value_id) {
+                case id_tp_pointer_scale: value[0] = digitizer_pointer_scale_pct; break;
+                case id_tp_natural_scroll: value[0] = digitizer_natural_scroll; break;
+                case id_tp_trace: value[0] = digitizer_gesture_trace; break;
+                case id_tp_drag_key:
+                    value[0] = tp_drag_key_idx;
+                    break;
+                case id_tp_drag_custom:
+                    value[0] = tp_drag_custom >> 8;
+                    value[1] = tp_drag_custom & 0xff;
+                    break;
+                case id_tp_swipe_left ... id_tp_swipe_down: {
+                    const uint8_t d = swipe_value_dir[value_id - id_tp_swipe_left];
+                    const uint16_t kc = dynamic_keymap_get_keycode(0, swipe_slot[d][0], swipe_slot[d][1]);
+                    value[0] = kc >> 8;
+                    value[1] = kc & 0xff;
+                    break;
+                }
+            }
+            break;
+        case id_custom_save:
+            trackpad_settings_save();
+            break;
+        default:
+            *command_id = id_unhandled;
+            break;
+    }
+}
+#endif
+
 // This keymap exists for macOS, which cannot consume digitizer reports:
 // mouse mode is forced unconditionally at boot. Without this, mouse mode
 // hangs on two fragile things - OS detection succeeding, and no host ever
@@ -175,6 +327,7 @@ void digitizer_swipe_action(digitizer_swipe_dir_t dir) {
 // firmware to digitizer reporting).
 void keyboard_post_init_user(void) {
     force_digitizer_send_mouse_reports = true;
+    trackpad_settings_apply();
 }
 
 // NAT_TOG (keyboard keycode) toggles scroll direction; natural is also

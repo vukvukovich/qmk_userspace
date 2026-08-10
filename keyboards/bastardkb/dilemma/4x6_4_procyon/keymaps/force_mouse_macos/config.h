@@ -18,6 +18,9 @@
 #pragma once
 
 #define DYNAMIC_KEYMAP_LAYER_COUNT 8
+/* VIA custom-config eeprom: bytes for the Trackpad settings pane
+ * (drag trigger keycode). */
+#define VIA_EEPROM_CUSTOM_CONFIG_SIZE 4
 #define SPLIT_LAYER_STATE_ENABLE
 #define SPLIT_LED_STATE_ENABLE
 
