@@ -20,7 +20,7 @@
 #define DYNAMIC_KEYMAP_LAYER_COUNT 8
 /* VIA custom-config eeprom: bytes for the Trackpad settings pane
  * (drag trigger keycode). */
-#define VIA_EEPROM_CUSTOM_CONFIG_SIZE 4
+#define VIA_EEPROM_CUSTOM_CONFIG_SIZE 8
 #define SPLIT_LAYER_STATE_ENABLE
 #define SPLIT_LED_STATE_ENABLE
 
@@ -54,7 +54,7 @@
  * (18-40 vs threshold 20) are razor-thin for weakly-coupled or dry
  * fingers - the user's palm-grounding trick proved failures scale
  * with signal strength. Raising gain widens every margin. */
-#define MXT_GAIN 12
+#define MXT_GAIN 13 /* sweep: born-merged stroke rate vs saturation */
 
 /* Contact geometry instrumentation for merged-finger detection: enables
  * ONLY the sensor's width/height aux bytes and their trace print - NOT

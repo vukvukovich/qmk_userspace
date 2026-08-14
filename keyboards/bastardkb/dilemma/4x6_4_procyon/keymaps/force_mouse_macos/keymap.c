@@ -131,7 +131,7 @@ extern bool digitizer_natural_scroll;
 // keep their labeled meaning.
 bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     /* drag trigger key: observed, never consumed - it keeps its own
-     * function while also arming three-finger select & drag */
+     * function while also arming select & drag */
     if (tp_drag_key != KC_NO && keycode == tp_drag_key) {
         tp_drag_key_held = record->event.pressed;
     }
@@ -191,14 +191,18 @@ void digitizer_swipe_action(digitizer_swipe_dir_t dir) {
 }
 
 // VIA "Trackpad" settings pane (custom menu channel): per-user,
-// EEPROM-persisted, no code edits. Stored in kb-eeconfig bytes 1-2
-// (byte 0 belongs to the DPI config):
-//   byte 1: bits 0-3 three-finger-drag layer (0 = off)
-//           bit 4 natural-scroll override set, bit 5 its value
-//   byte 2: pointer scale percent (0 = firmware default)
-extern bool    digitizer_three_finger_drag;
+// EEPROM-persisted, no code edits. Two backends:
+//   kb-eeconfig word (byte 0 = DPI config, untouched):
+//     byte 1: bit 4 settings-written marker
+//             bit 5 natural-scroll value, bit 6 gesture-trace value
+//     byte 2: pointer scale percent (valid 30-130; else firmware default)
+//   VIA custom-config region (offsets 0-6): drag-key index (0),
+//     custom drag keycode (1-2), pinch-in kc (3-4), pinch-out kc (5-6)
+extern bool    digitizer_select_drag;
 extern uint8_t digitizer_pointer_scale_pct;
 extern bool    digitizer_gesture_trace;
+extern uint16_t digitizer_pinch_in_kc;
+extern uint16_t digitizer_pinch_out_kc;
 
 
 
@@ -212,10 +216,19 @@ static void trackpad_settings_apply(void) {
     if (tp_drag_key_idx > TP_DRAG_CUSTOM_IDX) tp_drag_key_idx = 0;   /* fresh eeprom */
     if (tp_drag_custom == 0xffff) tp_drag_custom = KC_NO;
     tp_drag_key_resolve();
+    uint16_t kc;
+    via_read_custom_config(&kc, 3, sizeof(kc));
+    if (kc != 0xffff && kc != KC_NO) digitizer_pinch_in_kc = kc;
+    via_read_custom_config(&kc, 5, sizeof(kc));
+    if (kc != 0xffff && kc != KC_NO) digitizer_pinch_out_kc = kc;
 #endif
-    if (b1 & 0x10) digitizer_natural_scroll = (b1 >> 5) & 1;
-    digitizer_gesture_trace = (b1 >> 6) & 1;
-    if (b2 != 0) digitizer_pointer_scale_pct = b2;
+    /* a freshly wiped eeprom reads 0xff - only trust values inside
+     * their valid ranges (255% pointer speed taught us this) */
+    if (b1 != 0xff && (b1 & 0x10)) {
+        digitizer_natural_scroll = (b1 >> 5) & 1;
+        digitizer_gesture_trace  = (b1 >> 6) & 1;
+    }
+    if (b2 >= 30 && b2 <= 130) digitizer_pointer_scale_pct = b2;
 }
 
 static void trackpad_settings_save(void) {
@@ -226,17 +239,19 @@ static void trackpad_settings_save(void) {
 #ifdef VIA_ENABLE
     via_update_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
     via_update_custom_config(&tp_drag_custom, 1, sizeof(tp_drag_custom));
+    via_update_custom_config(&digitizer_pinch_in_kc, 3, sizeof(digitizer_pinch_in_kc));
+    via_update_custom_config(&digitizer_pinch_out_kc, 5, sizeof(digitizer_pinch_out_kc));
 #endif
 }
 
-/* Bindings drive the drag flag only on CHANGES, so the 3FnDrag toggle
+/* Bindings drive the drag flag only on CHANGES, so the SelDrag toggle
  * key keeps working when no binding is active. */
 void housekeeping_task_user(void) {
     static bool bound = false;
     const bool  want  = tp_drag_key_held;
     if (want != bound) {
         bound                       = want;
-        digitizer_three_finger_drag = want;
+        digitizer_select_drag = want;
     }
 }
 
@@ -251,6 +266,8 @@ enum trackpad_value_id {
     id_tp_drag_key = 9,
     id_tp_drag_custom = 10,
     id_tp_trace = 11,
+    id_tp_pinch_in = 12,
+    id_tp_pinch_out = 13,
 };
 
 /* The swipe keycode pickers proxy into the spare-matrix slots: same
@@ -274,6 +291,8 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_tp_pointer_scale: digitizer_pointer_scale_pct = value[0] ? value[0] : 1; break;
                 case id_tp_natural_scroll: digitizer_natural_scroll = value[0]; break;
                 case id_tp_trace: digitizer_gesture_trace = value[0]; break;
+                case id_tp_pinch_in: digitizer_pinch_in_kc = (value[0] << 8) | value[1]; break;
+                case id_tp_pinch_out: digitizer_pinch_out_kc = (value[0] << 8) | value[1]; break;
                 case id_tp_drag_key:
                     tp_drag_key_idx = value[0] <= TP_DRAG_CUSTOM_IDX ? value[0] : 0;
                     tp_drag_key_resolve();
@@ -294,6 +313,14 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                 case id_tp_pointer_scale: value[0] = digitizer_pointer_scale_pct; break;
                 case id_tp_natural_scroll: value[0] = digitizer_natural_scroll; break;
                 case id_tp_trace: value[0] = digitizer_gesture_trace; break;
+                case id_tp_pinch_in:
+                    value[0] = digitizer_pinch_in_kc >> 8;
+                    value[1] = digitizer_pinch_in_kc & 0xff;
+                    break;
+                case id_tp_pinch_out:
+                    value[0] = digitizer_pinch_out_kc >> 8;
+                    value[1] = digitizer_pinch_out_kc & 0xff;
+                    break;
                 case id_tp_drag_key:
                     value[0] = tp_drag_key_idx;
                     break;
