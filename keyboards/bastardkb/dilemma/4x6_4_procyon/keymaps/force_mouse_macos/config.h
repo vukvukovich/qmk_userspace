@@ -92,15 +92,47 @@
 #define ONE_EURO_MINCUTOFF 1.0f
 #define ONE_EURO_BETA 0.01f
 
-/* Scroll: travel/divisor wheel clicks per 16ms tick, magnitude intact.
- * Intended for a host-side event tap that renders each click as a
- * fixed pixel amount (macOS inflates raw wheel clicks to multiple
- * lines and accelerates by rate; neither is disableable per device).
- * The divisor is then the single source of truth for scroll speed:
- * 112 matches an Apple trackpad with the macOS Mouse scrolling
- * slider at its middle default. */
-#define DIGITIZER_SCROLL_DIVISOR 112
-#define DIGITIZER_SCROLL_INTERVAL_MS 16
+/* Scroll resolution, declared in the HID descriptor so no host-side
+ * software is needed to get a fine scroll quantum.
+ *
+ * macOS reads the wheel's physical-vs-logical extents to work out
+ * counts-per-inch and falls back to 9 when a descriptor omits them -
+ * that fallback is the chunky "one click = about three lines" wheel
+ * behaviour. Apple's own trackpad declares 400, so declare the same.
+ *
+ * This is NOT the Resolution Multiplier feature report, which was
+ * tried and is a measured dead end: macOS reads the multiplied value
+ * raw and scroll ends up ~120x too fast.
+ *
+ * Scroll: travel/divisor wheel clicks per 16ms tick, magnitude intact.
+ * The divisor is the single source of truth for scroll speed, and it
+ * is PAIRED with the resolution above - raising counts-per-inch makes
+ * each click move less, so the divisor has to come down by roughly the
+ * same factor to keep the speed. 112 with the old fallback resolution
+ * of 9 (and a host tap rendering 13px per click) works out at about 9
+ * here; expect to trim this by feel. */
+/* MEASURED CEILING - the sensor reports at about 40Hz where an Apple
+ * trackpad runs at 120Hz. Halving the interval from 16ms to 8ms did not
+ * move the observed event gap at all (23.8/30.4/25.4ms before and
+ * after), so the interval is not the limit and nothing in firmware can
+ * raise the rate. Scroll will always arrive in ~3x fewer, ~3x larger
+ * steps than Apple's.
+ *
+ * That inverts the resolution choice. With only ~40 events/s the pixels
+ * per event have to be LARGER, not finer, to reach the same speed, and
+ * at 400 CPI a click is only ~0.38px - so a fast flick hit the sv>100
+ * click clamp and peaked at exactly 38px in every measured burst, while
+ * Apple peaked at 162px. Halving the resolution doubles the pixels per
+ * click, which closes the ~2x median speed gap and leaves headroom
+ * before the clamp. Still ~44x finer than the macOS fallback of 9. */
+#define WHEEL_RESOLUTION_CPI 200
+#define DIGITIZER_SCROLL_DIVISOR 3
+#define DIGITIZER_SCROLL_INTERVAL_MS 8
+
+/* Measured against the built-in Apple trackpad: it flings at roughly
+ * 780 px/s, and one coast click is now about a pixel, so the coast needs
+ * a batch of about a dozen per tick to fling at the same speed. */
+#define DIGITIZER_SCROLL_COAST_CLICKS 12
 
 /* Natural scroll as the BOOT default - not dependent on OS detection
  * (which sometimes never fires); NatScrl still toggles at runtime. */
