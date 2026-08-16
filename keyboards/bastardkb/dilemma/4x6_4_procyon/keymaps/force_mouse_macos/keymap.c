@@ -26,7 +26,11 @@
  * picker can't suggest layer/custom keys - hardcoded app whitelist).
  * The dropdown stores an INDEX into this table. */
 static const uint16_t tp_drag_key_table[] = {KC_NO, TL_LOWR, TL_UPPR, MO(1), MO(2), MO(3), KC_LSFT, KC_RSFT, KC_LCTL, KC_LALT, KC_LGUI};
-static uint8_t  tp_drag_key_idx  = 0;
+/* Hold-to-drag armed by default on TL_LOWR, the left lower-layer thumb
+ * key: hold it and the pad selects and drags, release and it points
+ * again. Index 1 in the table above. A VIA setting still overrides it. */
+#define TP_DRAG_KEY_DEFAULT_IDX 1
+static uint8_t  tp_drag_key_idx  = TP_DRAG_KEY_DEFAULT_IDX;
 static uint16_t tp_drag_custom   = KC_NO; /* free-entry keycode, used when the dropdown says Custom */
 static uint16_t tp_drag_key      = KC_NO;
 static bool     tp_drag_key_held = false;
@@ -213,7 +217,7 @@ static void trackpad_settings_apply(void) {
 #ifdef VIA_ENABLE
     via_read_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
     via_read_custom_config(&tp_drag_custom, 1, sizeof(tp_drag_custom));
-    if (tp_drag_key_idx > TP_DRAG_CUSTOM_IDX) tp_drag_key_idx = 0;   /* fresh eeprom */
+    if (tp_drag_key_idx > TP_DRAG_CUSTOM_IDX) tp_drag_key_idx = TP_DRAG_KEY_DEFAULT_IDX; /* fresh eeprom */
     if (tp_drag_custom == 0xffff) tp_drag_custom = KC_NO;
     tp_drag_key_resolve();
     uint16_t kc;
