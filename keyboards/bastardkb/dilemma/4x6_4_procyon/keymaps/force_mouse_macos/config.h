@@ -38,8 +38,13 @@
  * Smooths slow motion hard, tails off at speed. */
 #define MXT_MOVE_SMOOTHING 255
 
-/* Raw sensor event trace over QMK console - re-enable for debugging */
+/* Raw sensor event trace over QMK console. Compiled IN so the VIA
+ * Trackpad tab's Gesture logging switch has something to turn on for a
+ * bug report, but OFF at boot: the EVT and OUT lines fire on every
+ * sensor update and every pointer move, so leaving them running taxes
+ * the pointing task in normal use. */
 #define MAXTOUCH_EVENT_TRACE
+#define DIGITIZER_MOUSE_GESTURE_TRACE_OFF
 
 /* Charger-noise campaign verdict (measured vs a third-party GaN
  * charger, the reproducible noise source): chrgtime 1 -> 2 HALVED

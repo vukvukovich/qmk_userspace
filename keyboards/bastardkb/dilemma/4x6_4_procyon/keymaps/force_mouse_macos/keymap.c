@@ -30,6 +30,9 @@ static const uint16_t tp_drag_key_table[] = {KC_NO, TL_LOWR, TL_UPPR, MO(1), MO(
  * key: hold it and the pad selects and drags, release and it points
  * again. Index 1 in the table above. A VIA setting still overrides it. */
 #define TP_DRAG_KEY_DEFAULT_IDX 1
+/* Bump this to push a new set of defaults out to keyboards that already
+ * have a saved config. */
+#define TP_CFG_MARK 0x12
 static uint8_t  tp_drag_key_idx  = TP_DRAG_KEY_DEFAULT_IDX;
 static uint16_t tp_drag_custom   = KC_NO; /* free-entry keycode, used when the dropdown says Custom */
 static uint16_t tp_drag_key      = KC_NO;
@@ -215,9 +218,21 @@ static void trackpad_settings_apply(void) {
     const uint8_t  b1 = (ee >> 8) & 0xff;
     const uint8_t  b2 = (ee >> 16) & 0xff;
 #ifdef VIA_ENABLE
+    /* Defaults can only apply to a config that has never been written.
+     * "Off" for the drag key is a legitimate choice that stores as 0,
+     * and a fresh eeprom also reads as something - so without a marker
+     * the firmware cannot tell "the user chose Off" from "the user has
+     * never touched this", and a new default would either be ignored
+     * forever or stamp over a deliberate setting on every boot.
+     * The spare byte at offset 7 records that this build's defaults
+     * have been applied once. */
+    uint8_t tp_cfg_mark = 0;
+    via_read_custom_config(&tp_cfg_mark, 7, sizeof(tp_cfg_mark));
+    const bool tp_cfg_fresh = (tp_cfg_mark != TP_CFG_MARK);
+
     via_read_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
     via_read_custom_config(&tp_drag_custom, 1, sizeof(tp_drag_custom));
-    if (tp_drag_key_idx > TP_DRAG_CUSTOM_IDX) tp_drag_key_idx = TP_DRAG_KEY_DEFAULT_IDX; /* fresh eeprom */
+    if (tp_cfg_fresh || tp_drag_key_idx > TP_DRAG_CUSTOM_IDX) tp_drag_key_idx = TP_DRAG_KEY_DEFAULT_IDX;
     if (tp_drag_custom == 0xffff) tp_drag_custom = KC_NO;
     tp_drag_key_resolve();
     uint16_t kc;
@@ -233,6 +248,13 @@ static void trackpad_settings_apply(void) {
         digitizer_gesture_trace  = (b1 >> 6) & 1;
     }
     if (b2 >= 30 && b2 <= 130) digitizer_pointer_scale_pct = b2;
+#ifdef VIA_ENABLE
+    if (tp_cfg_fresh) {
+        tp_cfg_mark = TP_CFG_MARK;
+        via_update_custom_config(&tp_cfg_mark, 7, sizeof(tp_cfg_mark));
+        via_update_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
+    }
+#endif
 }
 
 static void trackpad_settings_save(void) {
@@ -278,6 +300,18 @@ enum trackpad_value_id {
  * storage, same persistence, same full-pipeline execution (macros and
  * layer keys included) as assigning the slot keys directly. */
 static const digitizer_swipe_dir_t swipe_value_dir[4] = {DIGITIZER_SWIPE_DIR_LEFT, DIGITIZER_SWIPE_DIR_RIGHT, DIGITIZER_SWIPE_DIR_UP, DIGITIZER_SWIPE_DIR_DOWN};
+
+/* What a direction sends when its slot is empty - the same fallbacks
+ * digitizer_swipe_action() applies. */
+static uint16_t tp_swipe_default_kc(digitizer_swipe_dir_t dir) {
+    switch (dir) {
+        case DIGITIZER_SWIPE_DIR_RIGHT: return DIGITIZER_SWIPE_RIGHT_KC;
+        case DIGITIZER_SWIPE_DIR_LEFT: return DIGITIZER_SWIPE_LEFT_KC;
+        case DIGITIZER_SWIPE_DIR_DOWN: return DIGITIZER_SWIPE_DOWN_KC;
+        case DIGITIZER_SWIPE_DIR_UP: return DIGITIZER_SWIPE_UP_KC;
+    }
+    return KC_NO;
+}
 
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
     uint8_t *command_id        = &(data[0]);
@@ -334,7 +368,16 @@ void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
                     break;
                 case id_tp_swipe_left ... id_tp_swipe_down: {
                     const uint8_t d = swipe_value_dir[value_id - id_tp_swipe_left];
-                    const uint16_t kc = dynamic_keymap_get_keycode(0, swipe_slot[d][0], swipe_slot[d][1]);
+                    uint16_t kc = dynamic_keymap_get_keycode(0, swipe_slot[d][0], swipe_slot[d][1]);
+                    /* Report the keycode the swipe will actually send, not
+                     * the empty slot. An unassigned slot falls through to
+                     * the built-in shortcut, so showing KC_NO told the user
+                     * nothing - and read as broken next to the pinch rows,
+                     * which show their defaults because they are held in
+                     * firmware variables rather than proxied here. KC_NO
+                     * already means "use the default" for these, so there
+                     * is no separate disabled state to confuse it with. */
+                    if (kc == KC_NO) kc = tp_swipe_default_kc(d);
                     value[0] = kc >> 8;
                     value[1] = kc & 0xff;
                     break;
