@@ -147,10 +147,11 @@
 #define DIGITIZER_SCROLL_DIVISOR 3
 #define DIGITIZER_SCROLL_INTERVAL_MS 8
 
-/* Measured against the built-in Apple trackpad: it flings at roughly
- * 780 px/s, and one coast click is now about a pixel, so the coast needs
- * a batch of about a dozen per tick to fling at the same speed. */
-#define DIGITIZER_SCROLL_COAST_CLICKS 12
+/* Coast strength is no longer a fixed batch per tick - that had no
+ * velocity decay in its magnitude and made every fling the same size
+ * regardless of the gesture (a 24-click drag coasted 204 clicks). The
+ * kinetic model derives distance from the measured launch velocity;
+ * DIGITIZER_COAST_FRICTION_PER_MS is the knob if flings run too long. */
 
 /* Natural scroll as the BOOT default - not dependent on OS detection
  * (which sometimes never fires); NatScrl still toggles at runtime. */
