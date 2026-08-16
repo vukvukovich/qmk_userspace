@@ -67,8 +67,26 @@
  * 25-47% at 5+gain10, 73.6% at 25+gain12, 16.3% at 40+gain12 (fingers
  * had to be spread wide to scroll at all). Back to stock 5; gain 12
  * appears to be the real de-merge lever. */
+/* MEASURED DEAD END - do not retry. MRGTHR 25 + GAIN 12 was tried on the
+ * strength of an earlier note claiming a 73.6% close-finger two-contact
+ * share there. It destroyed two-finger scroll outright: at 25 the sensor
+ * merges an ordinary scrolling pair into one contact, so the two-finger
+ * path never runs. The original comment below has it right - HIGHER
+ * MRGTHR is MORE merge-eager - and whatever that 73.6% measured, it was
+ * not usable two-finger tracking. */
 #define MXT_MERGE_THRESHOLD 1 /* experiment: minimum practical - maximum finger separation; watch for phantom twins */
 #define MXT_MERGE_HYSTERESIS 5 /* stock 10: lower = a split pair re-fuses less easily (stacked-finger scroll) */
+
+/* MEASURED DEAD END - do not retry. Touch-release hysteresis looked
+ * like the fix for pinches lost to a dropped thumb: contacts vanished
+ * 2->1 on 170 occasions, the departing one at amplitude 14 median
+ * against a healthy 56, under a TCHTHR of 18. Holding a tracked contact
+ * down to 10 (MXT_TOUCH_HYST 8) did cut dropouts to 122 - and made
+ * close-finger zoom strictly worse: verdicts inside 16mm collapsed from
+ * 87 to 11 and the entire 16-20mm zoom bucket went from 7 to 0.
+ * Hysteresis keeps a MERGED blob registered as one contact for longer,
+ * so the pair never forms and the two-finger path never runs at all.
+ * Fewer dropouts, fewer gestures. */
 
 /* Pointer 10% slower per user preference; precision unaffected. */
 #define DIGITIZER_MOUSE_POINTER_SCALE_PCT 70
