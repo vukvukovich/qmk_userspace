@@ -31,8 +31,10 @@ static const uint16_t tp_drag_key_table[] = {KC_NO, TL_LOWR, TL_UPPR, MO(1), MO(
  * again. Index 1 in the table above. A VIA setting still overrides it. */
 #define TP_DRAG_KEY_DEFAULT_IDX 1
 /* Bump this to push a new set of defaults out to keyboards that already
- * have a saved config. */
-#define TP_CFG_MARK 0x12
+ * have a saved config. 0x12 shipped in 1.2.0 and stamped the marker
+ * without applying the changed logging default, so it needs a bump to
+ * reach the keyboards it already marked. */
+#define TP_CFG_MARK 0x14
 static uint8_t  tp_drag_key_idx  = TP_DRAG_KEY_DEFAULT_IDX;
 static uint16_t tp_drag_custom   = KC_NO; /* free-entry keycode, used when the dropdown says Custom */
 static uint16_t tp_drag_key      = KC_NO;
@@ -213,7 +215,12 @@ extern uint16_t digitizer_pinch_out_kc;
 
 
 
+static void trackpad_settings_save(void);
+
 static void trackpad_settings_apply(void) {
+    /* This build's boot defaults, captured before eeprom overwrites them,
+     * so the fresh path can restore them rather than guess. */
+    const bool tp_trace_default = digitizer_gesture_trace;
     const uint32_t ee = eeconfig_read_kb();
     const uint8_t  b1 = (ee >> 8) & 0xff;
     const uint8_t  b2 = (ee >> 16) & 0xff;
@@ -250,9 +257,17 @@ static void trackpad_settings_apply(void) {
     if (b2 >= 30 && b2 <= 130) digitizer_pointer_scale_pct = b2;
 #ifdef VIA_ENABLE
     if (tp_cfg_fresh) {
-        tp_cfg_mark = TP_CFG_MARK;
+        /* Apply this build's NEW defaults to a config written by an older
+         * one, once. Gesture logging shipped on through the betas, so an
+         * upgrading keyboard has it stored as on and would keep logging
+         * forever - the stored value wins over a firmware default, which
+         * is right in general and wrong for a default that has changed.
+         * Natural scroll and pointer speed are deliberately left alone:
+         * those are preferences the user set, not defaults we moved. */
+        digitizer_gesture_trace = tp_trace_default;
+        tp_cfg_mark             = TP_CFG_MARK;
         via_update_custom_config(&tp_cfg_mark, 7, sizeof(tp_cfg_mark));
-        via_update_custom_config(&tp_drag_key_idx, 0, sizeof(tp_drag_key_idx));
+        trackpad_settings_save();
     }
 #endif
 }
